@@ -166,7 +166,7 @@ export const doctors = [
     degree: "MBBS",
     experience: "2 Years",
     about:
-      "Dr. Davis has a strong commitment to delivering comprehensive medical care, focusing on preventive medicine, early diagnosis, and effective treatment strategies. Dr. Davis has a strong commitment to delivering comprehensive medical care, focusing on preventive medicine, early diagnosis, and effective treatment strategies.",
+      "Circle, Ring Road, London",
     fees: 40,
     address: {
       line1: "47th Cross, Richmond",

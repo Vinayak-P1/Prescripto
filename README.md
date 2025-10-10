@@ -3,9 +3,8 @@
 
 A comprehensive platform built with React, Node.js, Express, and MongoDB, designed to streamline appointment booking and management for both administrators, doctors, and patients. Pill_Drop aims to bridge the gap between healthcare providers and patients, making healthcare more accessible and efficient.
 
- 🚀 Live Demo
-Check out the live application here:  
-👉 [Prescripto - Live Website]((https://prescripto-frontend-verj.onrender.com/))
+🚀 Live Demo
+👉 [Prescripto - Live Website](https://prescripto-frontend-verj.onrender.com/)
 
 ## 🌟 Table of Contents
 - [🌟 Project Title & Badges](#-project-title--badges)

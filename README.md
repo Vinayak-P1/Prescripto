@@ -1,7 +1,7 @@
-# Pill_Drop 💊
+# Prescripto 💊
 [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)]() [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)]() [![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)]() [![Express](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)]() [![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=fff)]()
 
-A comprehensive platform built with React, Node.js, Express, and MongoDB, designed to streamline appointment booking and management for both administrators, doctors, and patients. Pill_Drop aims to bridge the gap between healthcare providers and patients, making healthcare more accessible and efficient.
+A comprehensive platform built with React, Node.js, Express, and MongoDB, designed to streamline appointment booking and management for both administrators, doctors, and patients. Prescripto aims to bridge the gap between healthcare providers and patients, making healthcare more accessible and efficient.
 
 🚀 Live Demo
 👉 [Prescripto - Live Website](https://prescripto-frontend-verj.onrender.com/)
@@ -300,7 +300,7 @@ This project is under the [No license](https://choosealicense.com/no-permission/
 
 
 ## 🔗 Important Links
--   **Repository Link**: [https://github.com/Vinayak-P1/Pill_Drop](https://github.com/Vinayak-P1/Pill_Drop)
+-   **Repository Link**: [https://github.com/Vinayak-P1/Pill_Drop](https://github.com/Vinayak-P1/Prescripto)
 
 
 

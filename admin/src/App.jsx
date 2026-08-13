@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import { Route,Routes } from 'react-router-dom';
 import Dashboard from './pages/Admin/Dashboard';
+import AIAnalytics from './pages/Admin/AIAnalytics';
 import AllAppointments from './pages/Admin/AllAppointments';
 import AddDoctor from './pages/Admin/AddDoctor';
 import DoctorsList from './pages/Admin/DoctorsList';
@@ -46,6 +47,7 @@ const App = () => {
             <Route path="/all-appointments" element={<AllAppointments/>} />
             <Route path="/add-doctor" element={<AddDoctor/>} />
             <Route path="/doctor-list" element={<DoctorsList/>} />
+            <Route path="/ai-analytics" element={<AIAnalytics/>} />
             <Route path="*" element={<Dashboard/>} />
           </>
         ) : isDoctor ? (

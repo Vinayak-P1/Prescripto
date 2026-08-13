@@ -26,16 +26,19 @@ const getDoctorsData=async()=>{
 }
 const loadUserProfileData=async()=>{
     try{
-    
-const {data} = await axios.get(backendUrl+'/api/user/get-profile',{headers:{token}})
-if(data.success){
-        setUserData(data.userData)
-}else{
-    toast.error(data.message)
-}
+        const {data} = await axios.get(backendUrl+'/api/user/get-profile',{headers:{token}})
+        if(data.success){
+            setUserData(data.userData)
+        }else{
+            toast.error(data.message)
+            setToken('')
+            localStorage.removeItem('token')
+        }
     }catch(error){
         console.log(error);
         toast.error(error.message)
+        setToken('')
+        localStorage.removeItem('token')
     }
 }
 const value={

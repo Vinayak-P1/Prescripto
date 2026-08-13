@@ -9,10 +9,14 @@ import MyProfile from "./pages/MyProfile";
 import MyAppointments from "./pages/MyAppointments";
 import Doctor from "./pages/Doctors";
 import Appointment from "./pages/Appointment";
+import SymptomChecker from "./pages/SymptomChecker";
+import ReportAnalyzer from "./pages/ReportAnalyzer";
 import Footer from './components/Footer';
+import ChatBot from './components/ChatBot';
   import { ToastContainer, toast } from 'react-toastify';
 function App() {
   return (
+    <>
     <div className='mx-4 sm:mx-[10%]'>
        <ToastContainer />
       <Navbar />
@@ -26,10 +30,15 @@ function App() {
       <Route path='/doctors' element={<Doctor />} />
        <Route path='/doctors/:speciality' element={<Doctor />} />
        <Route path='/appointments/:docId' element={<Appointment />} />
+       <Route path='/symptom-checker' element={<SymptomChecker />} />
+       <Route path='/report-analyzer' element={<ReportAnalyzer />} />
     </Routes>
     <Footer/>
     </div>
+    <ChatBot />
+    </>
   )
 }
 
 export default App
+

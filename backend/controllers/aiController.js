@@ -525,4 +525,341 @@ RULES:
   }
 };
 
-export { analyzeSymptoms, chatWithBot, getDashboardInsights, analyzeReport };
+// ============================================================
+// MODULE 5: AI Voice Agent with Tool Calling
+// ============================================================
+
+// --- Tool Executor Functions ---
+
+const toolExecutors = {
+  searchDoctors: async ({ speciality, name }) => {
+    try {
+      const query = { available: true };
+      if (speciality) {
+        query.speciality = { $regex: new RegExp(speciality, 'i') };
+      }
+      if (name) {
+        query.name = { $regex: new RegExp(name, 'i') };
+      }
+      const doctors = await doctorModel
+        .find(query)
+        .select('-password -email')
+        .lean();
+      return {
+        success: true,
+        doctors: doctors.map(d => ({
+          _id: d._id,
+          name: d.name,
+          speciality: d.speciality,
+          degree: d.degree,
+          experience: d.experience,
+          fees: d.fees,
+          available: d.available,
+          about: d.about,
+          image: d.image,
+        })),
+        count: doctors.length,
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  checkAvailability: async ({ docId }) => {
+    try {
+      const doctor = await doctorModel.findById(docId).select('-password -email').lean();
+      if (!doctor) return { success: false, error: 'Doctor not found' };
+      if (!doctor.available) return { success: false, error: 'Doctor is currently not available', doctorName: doctor.name };
+
+      const slotsBooked = doctor.slots_booked || {};
+      const today = new Date();
+      const availableSlots = [];
+
+      for (let i = 0; i < 7; i++) {
+        let currentDate = new Date(today);
+        currentDate.setDate(today.getDate() + i);
+
+        let endTime = new Date(today);
+        endTime.setDate(today.getDate() + i);
+        endTime.setHours(21, 0, 0, 0);
+
+        if (today.getDate() === currentDate.getDate()) {
+          currentDate.setHours(currentDate.getHours() > 10 ? currentDate.getHours() + 1 : 10);
+          currentDate.setMinutes(currentDate.getMinutes() > 30 ? 30 : 0);
+        } else {
+          currentDate.setHours(10);
+          currentDate.setMinutes(0);
+        }
+
+        const daySlots = [];
+        while (currentDate < endTime) {
+          const formattedTime = currentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const day = currentDate.getDate();
+          const month = currentDate.getMonth() + 1;
+          const year = currentDate.getFullYear();
+          const slotDateKey = `${day}_${month}_${year}`;
+
+          const isBooked = slotsBooked[slotDateKey] && slotsBooked[slotDateKey].includes(formattedTime);
+          if (!isBooked) {
+            daySlots.push({
+              date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+              slotDate: slotDateKey,
+              time: formattedTime,
+              dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][currentDate.getDay()],
+            });
+          }
+          currentDate.setMinutes(currentDate.getMinutes() + 30);
+        }
+        if (daySlots.length > 0) {
+          availableSlots.push({
+            date: daySlots[0].date,
+            dayOfWeek: daySlots[0].dayOfWeek,
+            slots: daySlots.map(s => s.time),
+            slotDate: daySlots[0].slotDate,
+          });
+        }
+      }
+
+      return {
+        success: true,
+        doctor: { _id: doctor._id, name: doctor.name, speciality: doctor.speciality, fees: doctor.fees },
+        availableSlots,
+        totalAvailableSlots: availableSlots.reduce((sum, day) => sum + day.slots.length, 0),
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  bookAppointment: async ({ docId, slotDate, slotTime, userId }) => {
+    try {
+      if (!userId) return { success: false, error: 'User must be logged in to book appointments' };
+      if (!docId || !slotDate || !slotTime) return { success: false, error: 'Missing required booking details (doctor, date, time)' };
+
+      const docData = await doctorModel.findById(docId).select('-password');
+      if (!docData) return { success: false, error: 'Doctor not found' };
+      if (!docData.available) return { success: false, error: 'Doctor is not currently available' };
+
+      let slots_booked = docData.slots_booked || {};
+
+      // Check slot availability
+      if (slots_booked[slotDate] && slots_booked[slotDate].includes(slotTime)) {
+        return { success: false, error: 'This time slot is no longer available. Please choose another slot.' };
+      }
+
+      // Check for duplicate booking
+      const existingAppointment = await appointmentModel.findOne({
+        userId,
+        docId,
+        slotTime,
+        cancelled: false,
+      }).lean();
+      if (existingAppointment) {
+        const existingDate = new Date(existingAppointment.slotDate);
+        const newDate = new Date(slotDate.replace(/_/g, '-'));
+        if (existingDate.toDateString() === newDate.toDateString()) {
+          return { success: false, error: 'You already have an appointment with this doctor at this time.' };
+        }
+      }
+
+      // Book the slot
+      if (slots_booked[slotDate]) {
+        slots_booked[slotDate].push(slotTime);
+      } else {
+        slots_booked[slotDate] = [slotTime];
+      }
+
+      const userData = await userModel.findById(userId).select('-password');
+      const formattedDate = new Date(slotDate.replace(/_/g, '-'));
+
+      const docDataPlain = docData.toObject();
+      delete docDataPlain.slots_booked;
+
+      const appointmentData = {
+        userId,
+        docId,
+        userData,
+        docData: docDataPlain,
+        amount: docData.fees,
+        slotTime,
+        slotDate: formattedDate,
+        date: Date.now(),
+      };
+
+      const newAppointment = new appointmentModel(appointmentData);
+      await newAppointment.save();
+      await doctorModel.findByIdAndUpdate(docId, { slots_booked });
+
+      return {
+        success: true,
+        message: 'Appointment booked successfully!',
+        appointment: {
+          id: newAppointment._id,
+          doctor: docData.name,
+          speciality: docData.speciality,
+          date: formattedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+          time: slotTime,
+          fees: docData.fees,
+        },
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  getMyAppointments: async ({ userId }) => {
+    try {
+      if (!userId) return { success: false, error: 'User must be logged in to view appointments' };
+
+      const appointments = await appointmentModel.find({ userId }).sort({ date: -1 }).lean();
+      const userInfo = await userModel.findById(userId).select('-password').lean();
+
+      return {
+        success: true,
+        appointments: appointments.map(a => ({
+          _id: a._id,
+          doctor: a.docData?.name || 'Unknown',
+          speciality: a.docData?.speciality || 'Unknown',
+          date: a.slotDate ? new Date(a.slotDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A',
+          time: a.slotTime,
+          fees: a.amount,
+          status: a.cancelled ? 'Cancelled' : a.isCompleted ? 'Completed' : 'Upcoming',
+          payment: a.payment ? 'Paid' : 'Pending',
+        })),
+        count: appointments.length,
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  },
+};
+
+// --- Voice Chat Controller ---
+
+const voiceChatWithBot = async (req, res) => {
+  try {
+    const { message, conversationHistory, confirmAction } = req.body;
+    const userId = req.user?.id;
+
+    if (!message || message.trim().length === 0) {
+      return res.json({ success: false, message: 'No message received' });
+    }
+
+    // Fetch available doctors for context
+    const doctors = await doctorModel.find({ available: true }).select('name speciality fees').lean();
+    const doctorList = doctors.map(d => `${d.name} (${d.speciality}) - ₹${d.fees} [ID: ${d._id}]`).join('\n');
+
+    const specialties = [...new Set(doctors.map(d => d.speciality))];
+
+    const historyContext = (conversationHistory && conversationHistory.length > 0)
+      ? conversationHistory.slice(-10).map(msg => `${msg.role}: ${msg.content}`).join('\n')
+      : '';
+
+    const prompt = `You are MedBot, a voice-enabled AI health assistant for PillDrop - a healthcare appointment booking platform. You help users find doctors, check availability, and book appointments through natural conversation.
+
+AVAILABLE DOCTORS ON PILLDROP:
+${doctorList}
+
+AVAILABLE SPECIALTIES: ${specialties.join(', ')}
+
+${historyContext ? `PREVIOUS CONVERSATION:\n${historyContext}\n` : ''}
+
+USER'S MESSAGE: "${message}"
+
+${confirmAction ? `USER HAS CONFIRMED THE PENDING ACTION. Execute it now.` : ''}
+
+RESPONSE FORMAT - You MUST respond ONLY in valid JSON (no markdown, no code blocks):
+{
+  "reply": "Your conversational response text here",
+  "action": null or "searchDoctors" or "checkAvailability" or "bookAppointment" or "getMyAppointments",
+  "actionParams": {} or { relevant parameters },
+  "requiresConfirmation": false
+}
+
+TOOL CALLING RULES:
+1. "searchDoctors" - When user wants to find a doctor by specialty or name. Params: { "speciality": "specialty name" } or { "name": "doctor name" }
+   - Map user terms to exact specialties: General physician, Gynecologist, Dermatologist, Pediatricians, Neurologist, Gastroenterologist
+2. "checkAvailability" - When user wants to see available slots. Params: { "docId": "doctor's _id from the list above" }
+   - Only use doctor IDs from the AVAILABLE DOCTORS list above
+3. "bookAppointment" - When user wants to book. Params: { "docId": "id", "slotDate": "day_month_year", "slotTime": "HH:MM AM/PM" }
+   - Set "requiresConfirmation": true BEFORE booking. Summarize the booking details in your reply and ask user to confirm.
+   - Only after user explicitly confirms, set action to "bookAppointment"
+4. "getMyAppointments" - When user wants to see their appointments. No params needed.
+
+CONVERSATION GUIDELINES:
+- Be warm, concise, and professional. Keep replies under 3 sentences for voice.
+- For health queries: provide general information and recommend consulting a doctor.
+- NEVER diagnose conditions or prescribe medicines.
+- For urgent symptoms (chest pain, breathing difficulty, severe bleeding): strongly advise calling emergency services immediately.
+- Use the doctor list above to suggest REAL doctors. Never invent doctors.
+- When a user mentions a specialty, search for doctors in that specialty.
+- When suggesting a specific doctor for booking, first check their availability.
+- For booking: collect doctor, date, and time through conversation. Ask for missing info.
+- If the user says "yes", "confirm", "go ahead", "book it" after you've asked for confirmation, proceed with the booking action.
+- Set action to null if just chatting or providing information.
+- Do NOT use emojis excessively - keep it natural for voice.`;
+
+    let aiResponse;
+    try {
+      const result = await geminiModel.generateContent(prompt);
+      const responseText = result.response.text();
+      const cleanedResponse = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      aiResponse = JSON.parse(cleanedResponse);
+    } catch (aiError) {
+      console.log('Gemini API error in voice chat:', aiError.message);
+      // Fallback response
+      aiResponse = {
+        reply: "I'm having a bit of trouble processing that right now. Could you try rephrasing your request?",
+        action: null,
+        actionParams: {},
+        requiresConfirmation: false,
+      };
+    }
+
+    let toolResult = null;
+
+    // Execute the tool if an action is specified and doesn't require confirmation
+    if (aiResponse.action && !aiResponse.requiresConfirmation) {
+      const executor = toolExecutors[aiResponse.action];
+      if (executor) {
+        const params = { ...(aiResponse.actionParams || {}), userId };
+        try {
+          toolResult = await executor(params);
+        } catch (toolError) {
+          console.log('Tool execution error:', toolError.message);
+          toolResult = { success: false, error: 'Failed to execute the requested action. Please try again.' };
+        }
+
+        // Enhance reply with tool results
+        if (toolResult && toolResult.success) {
+          if (aiResponse.action === 'searchDoctors' && toolResult.doctors?.length === 0) {
+            aiResponse.reply = "I couldn't find any available doctors matching that criteria. Would you like to search for a different specialty?";
+          }
+          if (aiResponse.action === 'bookAppointment' && toolResult.success) {
+            const apt = toolResult.appointment;
+            aiResponse.reply = `Great news! Your appointment has been booked successfully with Dr. ${apt.doctor} on ${apt.date} at ${apt.time}. The consultation fee is ₹${apt.fees}.`;
+          }
+        } else if (toolResult && !toolResult.success) {
+          aiResponse.reply += ` However, there was an issue: ${toolResult.error}`;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      reply: aiResponse.reply,
+      action: aiResponse.action,
+      toolResult,
+      requiresConfirmation: aiResponse.requiresConfirmation || false,
+      pendingAction: aiResponse.requiresConfirmation ? {
+        action: aiResponse.action,
+        params: aiResponse.actionParams,
+      } : null,
+    });
+  } catch (error) {
+    console.log('Voice chat error:', error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+export { analyzeSymptoms, chatWithBot, getDashboardInsights, analyzeReport, voiceChatWithBot };
